@@ -1,17 +1,15 @@
-const std = import("std");
-const FileTree = import("FileTree.zig").FileTree;
-const FileNode = import("FileNode.zig");
+const std = @import("std");
+const FileNode = @import("FileNode.zig").FileNode;
 const Allocator = std.mem.Allocator;
-
 
 pub fn main() !void {
 
     //build tree
-    //give tree the node to build context from 
+    //give tree the node to build context from
     //read contexts into memory and allocate
     //aggregate contexts into structured form
-    //send to LLM 
-    //in production we will try recognizing the folder structure and retrieving it 
+    //send to LLM
+    //in production we will try recognizing the folder structure and retrieving it
     //
     //
     const path1 = "src/structures/FileNode.zig";
@@ -20,29 +18,30 @@ pub fn main() !void {
     const path4 = "src/main.zig";
     const path5 = "src/server.zig";
 
-    var allocator = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = std.heap.page_allocator;
 
-    const fileTree = try FileTree.init("/src", allocator,allocator );
-    defer fileTree.deinit();
-    const root = fileTree.root:
-    try root.children.append(structuresFolder);
-    const structuresFolder = try FileNode.init(allocator, root,"/src/structures",allocator);
-    
-    const FN = try FileNode.init(allocator,structuresFolder, path1, allocator);
-    const FT = try FileNode.init(allocator,structuresFolder, path2, allocator);
+    //   const fileTree = try FileTree.init("/src", allocator, allocator);
+    //    defer fileTree.deinit();
+    //  const root = fileTree.root;
+    const root = try FileNode.init(allocator, null, "/src", allocator);
+    const FN = try FileNode.init(allocator, root, path1, allocator);
+    const FT = try FileNode.init(allocator, root, path2, allocator);
 
-    const mn = try FileNode.init(allocator,root,path4, allocator);
-    const rm = try FileNode.init(allocator,root,path3,allocator);
-    try root.children.append(structuresFolder);
-    try structuresFolder.children.append(FT);
-    try structuresFolder.children.append(FN);
+    const mn = try FileNode.init(allocator, root, path4, allocator);
+    const rm = try FileNode.init(allocator, root, path3, allocator);
+    const serv = try FileNode.init(allocator, root, path5, allocator);
+    try root.children.append(FT);
+    try root.children.append(FN);
     try root.children.append(mn);
     try root.children.append(rm);
+    try root.children.append(serv);
 
-    try rm.Invoke("Create a struct in zig capable of acting as a Unix based socket server. The server will have a thread for I/O and will read in bytes from lua where there is a delimiter '/00' separating the first piece of data (file path) from the second (file content). Using this it will attempt to add this to an existing FileTree. ");
-    
-}
+    const response = try serv.invoke("Create a struct in zig capable of acting as a Unix based socket server. The server will have a thread for I/O and will read in bytes from lua where there is a delimiter '/00' separating the first piece of data (file path) from the second (file content). Using this it will attempt to add this to an existing FileTree. ");
 
-pub fn buildTree() !void {
+    var parsed_json = try std.json.parseFromSlice(std.json.Value, allocator, response, .{});
+    defer parsed_json.deinit();
 
+    const stdout = std.io.getStdOut().writer();
+    try std.json.stringify(parsed_json.value, .{}, stdout);
+    try stdout.print("\n", .{});
 }

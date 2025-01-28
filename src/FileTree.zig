@@ -1,15 +1,12 @@
 // src/file_tree.zig
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const TreeNode = @import("./Tree.zig").TreeNode;
-const Tree = @import("./Tree.zig").Tree;
-const FileNode = @import("./FileNode.zig").FileNode;
+const FileNode = @import("FileNode.zig").FileNode;
 
 pub const FileTree = struct {
     root: *FileNode,
     node_allocator: Allocator,
     content_allocator: Allocator,
-    nodes: std.StringHashMap(*FileNode),
     pub fn init(
         root_path: []const u8,
         node_allocator: Allocator,

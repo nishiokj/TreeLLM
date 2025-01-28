@@ -3,14 +3,13 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const File = std.fs.File;
 const Stat = std.fs.File.Stat;
-
+const GrokLLM = @import("LLMRequest.zig").GrokLLM;
 // FileNode represents a file/directory in the tree
 pub const FileNode = struct {
     // --- Metadata ---
     parent: ?*FileNode,
     children: std.ArrayList(*FileNode), // For directories
     path: []const u8, // Full filesystem path
-    stat: Stat, // Cached file stats (mtime, size, etc.)
 
     // --- Content ---
     content: ?[]u8, // Loaded file content (null = unloaded)
@@ -30,7 +29,6 @@ pub const FileNode = struct {
             .content = null,
             .content_allocator = content_allocator,
         };
-        try self.refreshStats(); // Initialize stats
         return self;
     }
 
@@ -43,12 +41,14 @@ pub const FileNode = struct {
         self.children.deinit();
         self.allocator.destroy(self);
     }
-    
-    pub fn getFullContext(self: *FileNode) ![]const u8 {
-        var current = self.tree_node;
+    pub fn invoke(self: *FileNode, input: []const u8) ![]const u8 {
+        var grok = try GrokLLM.init(self.content_allocator);
+        defer grok.deinit();
+        const response = try grok.call(input);
+        return response;
     }
 
-        // Inside FileNode:
+    // Inside FileNode:
     pub fn loadContent(self: *FileNode) !void {
         if (self.content != null) return; // Already loaded
 
