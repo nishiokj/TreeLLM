@@ -9,7 +9,7 @@ pub const FileTree = struct {
     root: *FileNode,
     node_allocator: Allocator,
     content_allocator: Allocator,
-
+    nodes: std.StringHashMap(*FileNode),
     pub fn init(
         root_path: []const u8,
         node_allocator: Allocator,

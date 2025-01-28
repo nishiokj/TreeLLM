@@ -27,7 +27,6 @@ pub const FileNode = struct {
             .parent = parent,
             .children = std.ArrayList(*FileNode).init(allocator),
             .path = try allocator.dupe(u8, path), // Owned copy of path
-            .stat = undefined, // Populate via refreshStats()
             .content = null,
             .content_allocator = content_allocator,
         };
@@ -46,7 +45,7 @@ pub const FileNode = struct {
     }
     
     pub fn getFullContext(self: *FileNode) ![]const u8 {
-        var current = self.tree_node
+        var current = self.tree_node;
     }
 
         // Inside FileNode:
