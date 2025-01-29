@@ -43,8 +43,8 @@ pub const FileNode = struct {
     }
     pub fn invoke(self: *FileNode, input: []const u8) ![]const u8 {
         var grok = try GrokLLM.init(self.content_allocator);
-        defer grok.deinit();
         const response = try grok.call(input);
+        defer grok.deinit();
         return response;
     }
 

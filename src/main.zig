@@ -31,6 +31,11 @@ pub fn main() !void {
     const rm = try FileNode.init(allocator, root, path3, allocator);
     const serv = try FileNode.init(allocator, root, path5, allocator);
     defer root.deinit();
+    defer FN.deinit();
+    defer FT.deinit();
+    defer mn.deinit();
+    defer rm.deinit();
+    defer serv.deinit();
     try root.children.append(FT);
     try root.children.append(FN);
     try root.children.append(mn);
