@@ -30,6 +30,7 @@ pub fn main() !void {
     const mn = try FileNode.init(allocator, root, path4, allocator);
     const rm = try FileNode.init(allocator, root, path3, allocator);
     const serv = try FileNode.init(allocator, root, path5, allocator);
+    defer root.deinit();
     try root.children.append(FT);
     try root.children.append(FN);
     try root.children.append(mn);
@@ -37,11 +38,5 @@ pub fn main() !void {
     try root.children.append(serv);
 
     const response = try serv.invoke("Create a struct in zig capable of acting as a Unix based socket server. The server will have a thread for I/O and will read in bytes from lua where there is a delimiter '/00' separating the first piece of data (file path) from the second (file content). Using this it will attempt to add this to an existing FileTree. ");
-
-    var parsed_json = try std.json.parseFromSlice(std.json.Value, allocator, response, .{});
-    defer parsed_json.deinit();
-
-    const stdout = std.io.getStdOut().writer();
-    try std.json.stringify(parsed_json.value, .{}, stdout);
-    try stdout.print("\n", .{});
+    std.debug.print("{s}", .{response});
 }

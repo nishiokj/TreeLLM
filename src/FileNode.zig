@@ -37,9 +37,9 @@ pub const FileNode = struct {
         if (self.content) |bytes| {
             self.content_allocator.free(bytes);
         }
-        self.allocator.free(self.path);
+        self.content_allocator.free(self.path);
         self.children.deinit();
-        self.allocator.destroy(self);
+        self.content_allocator.destroy(self);
     }
     pub fn invoke(self: *FileNode, input: []const u8) ![]const u8 {
         var grok = try GrokLLM.init(self.content_allocator);

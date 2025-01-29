@@ -22,32 +22,33 @@ pub const GrokLLM = struct {
 
     pub fn call(self: *GrokLLM, input: []const u8) ![]const u8 {
         // Hardcoded API key - replace with your actual key
-        var method: ?http.Method = null;
-        method = http.Method.GET;
+
+        const method = http.Method.GET;
         const headers: Request.Headers = .{
-            .authorization = .{ .override = "" },
+            .authorization = .{ .override = "Bearer []" },
             .content_type = .{ .override = "application/json" },
         };
-        const fetch = .{
-            .method = method,
-            .location = .{ .url = "https://api.deepseek.com/chat/completions" },
-            .headers = headers,
-        };
 
-        var req = try self.client.fetch(fetch);
+        var server_header_buffer = std.ArrayList(u8).init(self.allocator);
+        defer server_header_buffer.deinit();
 
-        const json_input = try std.fmt.allocPrint(self.allocator, "{{\"prompt\":\"{s}\"}}", .{input});
-        defer self.allocator.free(json_input);
-
-        try req.transferEncoding(.chunked);
-        try req.writeAll(json_input);
-
-        try req.finish();
-        try req.wait();
-
-        const response = try req.reader().readAllAlloc(self.allocator, std.math.maxInt(usize));
-        defer self.allocator.free(response);
-
-        return response;
+        var response_body = std.ArrayList(u8).init(self.allocator);
+        defer response_body.deinit();
+        var request = self.client.open(method, .{
+            .scheme = "https",
+            .host = .{ .raw = "api.deepseek.com" },
+            .path = .{ .raw = "/chat/completions" },
+        }, .{ .server_header_buffer = server_header_buffer, .headers = headers });
+        try request.send();
+        try request.writeAll(input);
+        try request.finish();
+        try request.wait();
+        const length = try request.readAll(&response_body);
+        std.debug.print("{d}", .{length});
+        for (response_body.items) |item| {
+            std.debug.print("{c}", .{item});
+        }
+        const resp: []const u8 = "hello";
+        return resp;
     }
 };

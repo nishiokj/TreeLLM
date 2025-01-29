@@ -1,1 +1,12 @@
 .env
+
+# Zig
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.zig-cache/
+zig-out/
+zig-cache/
