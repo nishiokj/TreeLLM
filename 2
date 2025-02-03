@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const FileNode = @import("FileNode.zig").FileNode;
-const Types = @import("Types.zig");
+const Completion = @import("Types.zig");
 const Serializer = @import("Serializer.zig");
 pub const FileTree = struct {
     root: ?*FileNode = null,
@@ -22,12 +22,11 @@ pub const FileTree = struct {
         return self;
     }
 
-    pub fn aggregate(nodeList: []const *FileNode, allocator: Allocator) !std.ArrayList(u8) {
+    pub fn aggregate(nodeList: []const *FileNode, allocator: Allocator) !*std.ArrayList(u8) {
         var aggregateContext = std.ArrayList(u8).init(allocator);
         for (nodeList) |file| {
             if (file.is_dir == 0) {
                 try file.loadContent();
-                defer file.unloadContent();
                 if (file.content) |content| {
                     try aggregateContext.appendSlice(content);
                 }
@@ -45,11 +44,13 @@ pub const FileTree = struct {
         }
         return nodeList.toOwnedSlice();
     }
-    pub fn completion(self: *FileTree, currNode: *FileNode, prompt: []const u8, model: []const u8) !void {
+    pub fn completion(self: *FileTree, currNode: *FileNode, prompt: []const u8, model: []const u8) !Completion {
         const nodeList = try traverse(currNode, self.allocator);
         const contextBuffer = try aggregate(nodeList, self.allocator);
+        defer nodeList.deinit();
         defer contextBuffer.deinit();
-        try currNode.invoke(prompt, model);
+        const response = try self.currNode.invoke(prompt, model);
+        return response;
     }
 
     pub fn deinit(self: *FileTree) void {
