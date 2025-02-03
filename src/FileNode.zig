@@ -5,7 +5,7 @@ const File = std.fs.File;
 const Stat = std.fs.File.Stat;
 const ChatClient = @import("LLMRequest.zig").ChatClient;
 const Types = @import("Types.zig");
-pub const Model = enum { OPEN_AI_REASONING, OPEN_AI, NONE };
+pub const Model = enum { OPEN_AI_REASONING, OPEN_AI, GEMINI_FLASH, NONE };
 pub const Error = error{
     INVALID_MODEL,
 };
@@ -60,17 +60,19 @@ pub const FileNode = struct {
         if (std.mem.eql(u8, model, "o3-mini")) {
             return Model.OPEN_AI_REASONING;
         }
+        if (std.mem.eq(u8, model, "gemini")) {
+            return Model.GEMINI_FLASH;
+        }
         return Model.NONE;
     }
 
-    pub fn invoke(self: *FileNode, input: []const u8, model: []const u8) !void {
-        var grok = try ChatClient.init(self.allocator, "sk-proj-uKkVpiUFcaygbFaqaDVd8NvzIPfbMwkFg6-");
+    pub fn invoke(self: *FileNode, input: []const u8, model: []const u8, api_key: []const u8) !void {
+        var grok = try ChatClient.init(self.allocator);
         const model_type = map_model(model);
         var response: Types.Completion = undefined;
         switch (model_type) {
             Model.OPEN_AI_REASONING => {
                 const content = .{ .type = "text", .text = input };
-
                 var content_list = std.ArrayList(Types.Content).init(self.allocator);
                 try content_list.append(content);
                 const message = .{ .role = "user", .content = &content_list };
@@ -82,7 +84,8 @@ pub const FileNode = struct {
                     .model = model,
                     .messages = &message_list,
                 };
-                response = try grok.reasoningChatRequest(payload);
+                const uri = "https://api.openai.com/v1/chat/completions";
+                response = try grok.reasoningChatRequest(payload, uri, api_key);
             },
             Model.OPEN_AI => {
                 const system_message = .{
@@ -93,12 +96,26 @@ pub const FileNode = struct {
                     .role = "user",
                     .content = input,
                 };
+                const uri = "https://api.openai.com/v1/chat/completions";
                 var messages = [2]Types.Message{ system_message, user_message };
                 const payload = Types.CompletionPayload{
                     .model = model,
                     .messages = &messages,
                 };
-                response = try grok.chatRequest(payload);
+                response = try grok.chatRequest(payload, uri, api_key);
+            },
+            Model.GEMINI_FLASH => {
+                const user_message = .{
+                    .role = "user",
+                    .content = input,
+                };
+                var message = [1]Types.Message{user_message};
+                const payload = Types.CompletionPayload{
+                    .model = model,
+                    .messages = &message,
+                };
+                const uri = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+                response = try grok.chatRequest(payload, uri, api_key);
             },
             Model.NONE => {
                 std.debug.print("Not a valid model {s}", .{model});

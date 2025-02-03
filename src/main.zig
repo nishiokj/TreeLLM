@@ -47,5 +47,15 @@ pub fn main() !void {
     defer mn.deinit();
     defer serv.deinit();
     defer types.deinit();
-    try tree.completion(serv, "Write framework for a server struct in zig (Under 300 tokens). Do not respond with words, simply write the code neatly. Zig version 0.14. Instructions ###  Server is designed to be a multithreaded socket server that listens on a posix socket, converts bytes into string args in the format: file % request %", "o1-mini");
+    var env = try std.process.getEnvMap(allocator);
+    defer env.deinit();
+    const api_key = env.get("GEMINI_KEY");
+    if (api_key != null) {
+        try tree.completion(
+            serv,
+            "Write framework for a server struct in zig (Under 300 tokens). Do not respond with words, simply write the code neatly. Zig version 0.14. Instructions ###  Server is designed to be a multithreaded socket server that listens on a posix socket, converts bytes into string args in the format: file % request %",
+            "o1-mini",
+            api_key.?,
+        );
+    }
 }

@@ -45,11 +45,17 @@ pub const FileTree = struct {
         }
         return nodeList.toOwnedSlice();
     }
-    pub fn completion(self: *FileTree, currNode: *FileNode, prompt: []const u8, model: []const u8) !void {
+    pub fn completion(
+        self: *FileTree,
+        currNode: *FileNode,
+        prompt: []const u8,
+        model: []const u8,
+        api_key: []const u8,
+    ) !void {
         const nodeList = try traverse(currNode, self.allocator);
         const contextBuffer = try aggregate(nodeList, self.allocator);
         defer contextBuffer.deinit();
-        try currNode.invoke(prompt, model);
+        try currNode.invoke(prompt, model, api_key);
     }
 
     pub fn deinit(self: *FileTree) void {

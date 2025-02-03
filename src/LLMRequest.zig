@@ -41,14 +41,14 @@ pub const ChatClient = struct {
     // An arena allocator used for internal buffer allocations.
     arena: *std.heap.ArenaAllocator,
     // The HTTP client that abstracts the TCP/TLS connection.
-    headers: Request.Headers,
-    /// Initializes a ChatClient with a caller-provided generic allocator.
-    pub fn init(allocator: Allocator, api_key: []const u8) !ChatClient {
+    pub fn init(allocator: Allocator) !ChatClient {
         var arena = try allocator.create(std.heap.ArenaAllocator);
         arena.* = std.heap.ArenaAllocator.init(allocator);
-        const headers = try get_headers(arena.allocator(), api_key);
 
-        return ChatClient{ .allocator = arena.allocator(), .arena = arena, .headers = headers };
+        return ChatClient{
+            .allocator = arena.allocator(),
+            .arena = arena,
+        };
     }
 
     /// Clean up resources held by ChatClient.
@@ -78,13 +78,16 @@ pub const ChatClient = struct {
     pub fn reasoningChatRequest(
         self: *ChatClient,
         payload: Types.COTCompletionPayload,
+        uri: []const u8,
+        api_key: []const u8,
     ) !Types.Completion {
+        const headers = try get_headers(self.allocator, api_key);
         const body = try Serializer.serializeCOT(self.allocator, payload);
         const server_header_buffer: []u8 = try self.allocator.alloc(u8, 8 * 1024 * 4);
         var httpClient = http.Client{ .allocator = self.allocator };
         defer httpClient.deinit();
-        const uri = std.Uri.parse("https://api.openai.com/v1/chat/completions") catch unreachable;
-        var request = try httpClient.open(.POST, uri, .{ .server_header_buffer = server_header_buffer, .headers = self.headers });
+        const parsed_uri = std.Uri.parse(uri) catch unreachable;
+        var request = try httpClient.open(.POST, parsed_uri, .{ .server_header_buffer = server_header_buffer, .headers = headers });
         defer request.deinit();
         request.transfer_encoding = .{ .content_length = body.len };
         try request.send();
@@ -104,13 +107,16 @@ pub const ChatClient = struct {
     pub fn chatRequest(
         self: *ChatClient,
         payload: Types.CompletionPayload,
+        uri: []const u8,
+        api_key: []const u8,
     ) !Types.Completion {
+        const headers = try get_headers(self.allocator, api_key);
         const body = try std.json.stringifyAlloc(self.allocator, payload, .{ .whitespace = .indent_2 });
         const server_header_buffer: []u8 = try self.allocator.alloc(u8, 8 * 1024 * 4);
         var httpClient = http.Client{ .allocator = self.allocator };
         defer httpClient.deinit();
-        const uri = std.Uri.parse("https://api.openai.com/v1/chat/completions") catch unreachable;
-        var request = try httpClient.open(.POST, uri, .{ .server_header_buffer = server_header_buffer, .headers = self.headers });
+        const parsed_uri = std.Uri.parse(uri) catch unreachable;
+        var request = try httpClient.open(.POST, parsed_uri, .{ .server_header_buffer = server_header_buffer, .headers = headers });
         defer request.deinit();
         request.transfer_encoding = .{ .content_length = body.len };
         try request.send();
