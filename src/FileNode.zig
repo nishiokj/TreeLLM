@@ -11,7 +11,7 @@ pub const Error = error{
 };
 pub const FileNode = struct {
     parent: ?*FileNode,
-    children: std.ArrayList(*FileNode), // For directories
+    children: ?std.ArrayList(*FileNode), // For directories
     path: []const u8, // Full filesystem path
     is_dir: u8,
     content: ?[]u8, // Loaded file content (null = unloaded)
@@ -43,7 +43,9 @@ pub const FileNode = struct {
         if (self.content) |bytes| {
             self.allocator.free(bytes);
         }
-        self.children.deinit();
+        if (self.children) |child| {
+            child.deinit();
+        }
         self.allocator.free(self.path);
         const alloc = self.content_allocator.child_allocator;
         self.content_allocator.deinit();
@@ -60,7 +62,7 @@ pub const FileNode = struct {
         if (std.mem.eql(u8, model, "o3-mini")) {
             return Model.OPEN_AI_REASONING;
         }
-        if (std.mem.eq(u8, model, "gemini")) {
+        if (std.mem.eql(u8, model, "gemini-1.5-flash")) {
             return Model.GEMINI_FLASH;
         }
         return Model.NONE;

@@ -5,7 +5,7 @@ pub const COTMessage = struct { role: []const u8, content: *std.ArrayList(Conten
 pub const Message = struct { role: []const u8, content: []const u8 };
 pub const CompletionPayload = struct { model: []const u8, messages: []Message };
 pub const COTCompletionPayload = struct { model: []const u8, messages: *std.ArrayList(COTMessage) };
-pub const Choice = struct { index: usize, message: struct { role: []const u8, content: []const u8, refusal: ?[]const u8 }, finish_reason: ?[]const u8 = null, logprobs: ?[]const u8 = null };
+pub const Choice = struct { index: usize, message: struct { role: []const u8, content: []const u8, refusal: ?[]const u8 = null }, finish_reason: ?[]const u8 = null, logprobs: ?[]const u8 = null };
 
 pub const Usage = struct {
     prompt_tokens: u64,

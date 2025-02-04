@@ -2,7 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const FileNode = @import("FileNode.zig").FileNode;
 const Types = @import("Types.zig");
-const Serializer = @import("Serializer.zig");
+const Serializer = @import("Serializer.zig").Serializer;
 pub const FileTree = struct {
     root: ?*FileNode = null,
     content_allocator: *std.heap.ArenaAllocator,
@@ -22,13 +22,24 @@ pub const FileTree = struct {
         return self;
     }
 
-    pub fn aggregate(nodeList: []const *FileNode, allocator: Allocator) !std.ArrayList(u8) {
+    pub fn aggregate(nodeList: []const *FileNode, allocator: Allocator, prompt: []const u8) !std.ArrayList(u8) {
         var aggregateContext = std.ArrayList(u8).init(allocator);
+        try aggregateContext.appendSlice("PROMPT % ");
+        try aggregateContext.appendSlice(prompt);
+        try aggregateContext.appendSlice("\n");
+        try aggregateContext.appendSlice("CONTEXT % ");
+        try aggregateContext.appendSlice("$$$");
         for (nodeList) |file| {
             if (file.is_dir == 0) {
                 try file.loadContent();
                 defer file.unloadContent();
                 if (file.content) |content| {
+                    try aggregateContext.appendSlice("\n");
+                    try aggregateContext.appendSlice("$$");
+                    try aggregateContext.appendSlice("\n");
+                    try aggregateContext.appendSlice("file path$ ");
+                    try aggregateContext.appendSlice(file.path);
+                    try aggregateContext.appendSlice("\n");
                     try aggregateContext.appendSlice(content);
                 }
             }
@@ -38,7 +49,13 @@ pub const FileTree = struct {
     pub fn traverse(current: *FileNode, allocator: Allocator) ![]const *FileNode {
         var nodeList = std.ArrayList(*FileNode).init(allocator);
         var currNode = current;
-
+        if (currNode.parent) |parent| {
+            if (parent.children) |children| {
+                for (children.items) |child| {
+                    try nodeList.append(child);
+                }
+            }
+        }
         while (currNode.parent) |parent| {
             try nodeList.append(currNode);
             currNode = parent;
@@ -53,9 +70,10 @@ pub const FileTree = struct {
         api_key: []const u8,
     ) !void {
         const nodeList = try traverse(currNode, self.allocator);
-        const contextBuffer = try aggregate(nodeList, self.allocator);
+        var contextBuffer = try aggregate(nodeList, self.allocator, prompt);
         defer contextBuffer.deinit();
-        try currNode.invoke(prompt, model, api_key);
+        const serialized_query = try Serializer.formatBuffer(self.allocator, try contextBuffer.toOwnedSlice());
+        try currNode.invoke(serialized_query, model, api_key);
     }
 
     pub fn deinit(self: *FileTree) void {
