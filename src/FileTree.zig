@@ -24,22 +24,18 @@ pub const FileTree = struct {
 
     pub fn aggregate(nodeList: []const *FileNode, allocator: Allocator, prompt: []const u8) !std.ArrayList(u8) {
         var aggregateContext = std.ArrayList(u8).init(allocator);
-        try aggregateContext.appendSlice("PROMPT % ");
+        try aggregateContext.appendSlice("%%%");
         try aggregateContext.appendSlice(prompt);
-        try aggregateContext.appendSlice("\n");
-        try aggregateContext.appendSlice("CONTEXT % ");
+        try aggregateContext.appendSlice("%%%");
         try aggregateContext.appendSlice("$$$");
         for (nodeList) |file| {
             if (file.is_dir == 0) {
                 try file.loadContent();
                 defer file.unloadContent();
                 if (file.content) |content| {
-                    try aggregateContext.appendSlice("\n");
                     try aggregateContext.appendSlice("$$");
-                    try aggregateContext.appendSlice("\n");
                     try aggregateContext.appendSlice("file path$ ");
                     try aggregateContext.appendSlice(file.path);
-                    try aggregateContext.appendSlice("\n");
                     try aggregateContext.appendSlice(content);
                 }
             }
@@ -72,7 +68,7 @@ pub const FileTree = struct {
         const nodeList = try traverse(currNode, self.allocator);
         var contextBuffer = try aggregate(nodeList, self.allocator, prompt);
         defer contextBuffer.deinit();
-        const serialized_query = try Serializer.formatBuffer(self.allocator, try contextBuffer.toOwnedSlice());
+        const serialized_query = try Serializer.buildFormattedString(self.allocator, try contextBuffer.toOwnedSlice());
         try currNode.invoke(serialized_query, model, api_key);
     }
 

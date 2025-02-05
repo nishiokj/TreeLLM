@@ -9,87 +9,99 @@ pub const Query = struct {
 
     context: []const u8,
 };
+pub const BuildError = error{
+    InvalidInput,
+};
+pub const ParseError = error{
+    MissingPrompt,
+    MissingContext,
+    MissingFilePath,
+};
 pub const Serializer = struct {
-    pub fn formatBuffer(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
-        // Split the input into tokens by "%" delimiter.
-        // We expect an even number of tokens: a key followed by its value.
-        var tokens = std.mem.splitAny(u8, input, "%");
-        const first = tokens.first();
-
-        // Default empty values.
-        var prompt: []const u8 = "";
-        var context: []const u8 = "";
-        prompt = first;
-        context = tokens.next().?;
-        // We now build our formatted output.
-        // We use an ArrayList(u8) as a simple string builder.
-        var builder = std.ArrayList(u8).init(allocator);
-
-        // Append PROMPT
-        try builder.appendSlice("##PROMPT##:\n  ");
-        try builder.appendSlice(prompt);
-        try builder.appendSlice("\n\n");
-
-        // Append CONTEXT
-        try builder.appendSlice("##CONTEXT##:\n");
-        // Here we assume that individual file entries are separated by a semicolon.
-        var contextEntries = std.mem.splitAny(u8, context, "$$$");
-        while (contextEntries.next()) |iter| {
-            const trimmedEntry = std.mem.trim(u8, iter, " ");
-            if (trimmedEntry.len == 0) continue; // skip empty entries
-
-            // Each file entry is expected to be comma-separated.
-            const parts = std.mem.splitAny(u8, trimmedEntry, "$$");
-
-            var filename: []const u8 = "";
-            //    var file_type: []const u8 = "";
-            //    var functions: []const u8 = "";
-
-            // The first part is expected to contain the file name,
-            // possibly in the form "file: src/main.zig"
-            var _items = parts.first().items;
-            const firstPart = std.mem.trim(u8, _items, " ");
-            _ = _items;
-            if (std.mem.indexOf(u8, firstPart, "$")) |pos| {
-                filename = std.mem.trim(u8, firstPart[pos + 1 ..], " ");
+    // Helper: Append a slice with JSON escaping.
+    fn appendEscaped(builder: *std.ArrayList(u8), slice: []const u8) !void {
+        const hexChars = "0123456789ABCDEF";
+        for (slice) |c| {
+            // Replace newline with a space.
+            if (c == '\n') {
+                try builder.appendSlice(" ");
+            } else if (c == '"') {
+                // Escape a double quote.
+                try builder.appendSlice("\\\"");
+            } else if (c == '\\') {
+                // Escape a backslash.
+                try builder.appendSlice("\\\\");
+            } else if (c < 0x20) {
+                // For other control characters, output a Unicode escape.
+                var buffer: [6]u8 = undefined;
+                buffer[0] = '\\';
+                buffer[1] = 'u';
+                buffer[2] = '0';
+                buffer[3] = '0';
+                buffer[4] = hexChars[(c >> 4) & 0xF];
+                buffer[5] = hexChars[c & 0xF];
+                try builder.appendSlice(buffer[0..6]);
             } else {
-                filename = firstPart;
+                try builder.append(c);
             }
-
-            // Look for other attributes.
-            // for (std.math.range(1, parts.len)) |i| {
-            //    const part = std.mem.trim(u8, parts[i], " ");
-            //    if (std.mem.startsWith(u8, part, "type:")) {
-            //       file_type = std.mem.trim(u8, part[5..], " ");
-            //    } else if (std.mem.startsWith(u8, part, "functions:")) {
-            //        functions = std.mem.trim(u8, part[10..], " ");
-            //   }
-            //  }
-
-            // Append file info with sub-indentation.
-            try builder.appendSlice("  ");
-            try builder.appendSlice(filename);
-            try builder.appendSlice("\n");
-            //      if (file_type.len > 0) {
-            //        try builder.appendSlice("    type: ");
-            //      try builder.appendSlice(file_type);
-            //    try builder.appendSlice("\n");
-            //   }
-            // if (functions.len > 0) {
-            //   try builder.appendSlice("    functions: ");
-            // try builder.appendSlice(functions);
-            //    try builder.appendSlice("\n");
-            //  }
         }
-
-        //   try builder.appendSlice("\n##CONSTRAINTS##:\n  ");
-        //    try builder.appendSlice(constraints);
-        //   try builder.appendSlice("\n");
-
-        // Return the completed formatted string.
-        return builder.toOwnedSlice();
     }
 
+    pub fn buildFormattedString(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
+        var builder = std.ArrayList(u8).init(allocator);
+
+        // Trim overall input.
+        const trimmed_input = std.mem.trim(u8, input, " ");
+
+        // Split the input on "%%%" delimiter.
+        var tokens = std.mem.splitSequence(u8, trimmed_input, "%%%");
+
+        // Skip empty tokens to get the prompt.
+        var prompt: []const u8 = "";
+        while (true) {
+            const token = tokens.next() orelse break;
+            if (!std.mem.eql(u8, token, "")) {
+                prompt = token;
+                break;
+            }
+        }
+        if (prompt.len == 0) return ParseError.MissingPrompt;
+
+        // The next token should be the context.
+        const context_token = tokens.next() orelse return ParseError.MissingContext;
+
+        // Now split the context using "$$" delimiter.
+        var ctxParts = std.mem.splitSequence(u8, context_token, "$$");
+        // The first part is the main context text.
+        var mainContext: []const u8 = "";
+        if (ctxParts.next()) |firstCtx| {
+            mainContext = firstCtx;
+        }
+
+        // Append the formatted sections with escaped text.
+        try builder.appendSlice("##PROMPT##");
+        try appendEscaped(&builder, prompt);
+        try builder.appendSlice("##CONTEXT##");
+        try appendEscaped(&builder, mainContext);
+
+        // For each remaining part in context, try to extract a file path.
+        while (true) {
+            const fileEntry = ctxParts.next();
+            if (fileEntry) |entry| {
+                // Look for the first "$" in the file entry.
+                if (std.mem.indexOf(u8, entry, "$")) |delimPos| {
+                    // The file path is the substring after the "$" delimiter.
+                    const filePath = std.mem.trim(u8, entry[delimPos + 1 ..], " ");
+                    if (filePath.len == 0)
+                        return ParseError.MissingFilePath;
+                    try builder.appendSlice("#FILE# ");
+                    try appendEscaped(&builder, filePath);
+                }
+            } else break;
+        }
+
+        return builder.toOwnedSlice();
+    }
     pub fn serializeContent(allocator: std.mem.Allocator, content: Types.Content) ![]u8 {
         // Build a JSON object for content:
         var builder = std.ArrayList(u8).init(allocator);
@@ -100,7 +112,6 @@ pub const Serializer = struct {
         try builder.appendSlice("\"}");
         return builder.toOwnedSlice();
     }
-
     pub fn serializeCOTMessage(allocator: std.mem.Allocator, msg: Types.COTMessage) ![]u8 {
         // Build a JSON object for a single message:
         var builder = std.ArrayList(u8).init(allocator);

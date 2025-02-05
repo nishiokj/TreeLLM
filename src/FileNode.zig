@@ -9,6 +9,7 @@ pub const Model = enum { OPEN_AI_REASONING, OPEN_AI, GEMINI_FLASH, NONE };
 pub const Error = error{
     INVALID_MODEL,
 };
+
 pub const FileNode = struct {
     parent: ?*FileNode,
     children: ?std.ArrayList(*FileNode), // For directories
